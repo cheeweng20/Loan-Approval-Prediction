@@ -141,15 +141,6 @@ if submitted:
         ):
             column.metric(model_name, predicted_label.upper())
 
-        labels = set(predictions.values())
-        if len(labels) == 1:
-            st.success("Both models agree on this prediction.")
-        else:
-            st.warning(
-                "The models disagree. This illustrates model uncertainty and "
-                "should not be interpreted as a lending recommendation."
-            )
-
 st.divider()
 st.subheader("Model comparison")
 if COMPARISON_TABLE_PATH.is_file():
