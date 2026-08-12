@@ -4,11 +4,24 @@ Run from the project root with:
     streamlit run streamlit_app.py
 """
 
+import sys
+from pathlib import Path
+
 import joblib
 import pandas as pd
 import streamlit as st
 
-from src.settings import FEATURE_COLUMNS, MODELS_DIR
+SRC_DIR = Path(__file__).resolve().parent / "src"
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
+import training_utils  # noqa: F401
+
+from src.settings import (
+    FEATURE_COLUMNS,
+    FEATURE_IMPACT_CHART_PATH,
+    FEATURE_IMPACT_TABLE_PATH,
+    MODELS_DIR,
+)
 
 
 MODEL_PATHS = {
@@ -23,6 +36,13 @@ COMPARISON_COLUMNS = (
     "precision",
     "recall",
     "f1",
+)
+FEATURE_IMPACT_COLUMNS = (
+    "rank",
+    "feature",
+    "impact_score_mean",
+    "impact_score_std",
+    "selected_by_model",
 )
 
 
@@ -53,6 +73,23 @@ def load_comparison_table():
         "precision": "Precision",
         "recall": "Recall",
         "f1": "F1-score",
+    })
+
+
+def load_feature_impact_table():
+    table = pd.read_csv(FEATURE_IMPACT_TABLE_PATH)
+    missing_columns = set(FEATURE_IMPACT_COLUMNS) - set(table.columns)
+    if missing_columns:
+        raise ValueError(
+            "The feature impact table is missing columns: "
+            f"{', '.join(sorted(missing_columns))}."
+        )
+    return table[list(FEATURE_IMPACT_COLUMNS)].rename(columns={
+        "rank": "Rank",
+        "feature": "Feature",
+        "impact_score_mean": "Impact score",
+        "impact_score_std": "Score variation",
+        "selected_by_model": "Selected",
     })
 
 
@@ -165,5 +202,31 @@ if COMPARISON_CHART_PATH.is_file():
     st.image(
         str(COMPARISON_CHART_PATH),
         caption="Logistic Regression and Random Forest test-set performance",
+        width="stretch",
+    )
+
+st.divider()
+st.subheader("Feature impact")
+if FEATURE_IMPACT_TABLE_PATH.is_file():
+    try:
+        feature_impact = load_feature_impact_table()
+    except (OSError, UnicodeError, ValueError, pd.errors.ParserError) as exception:
+        st.warning(f"Could not read the saved feature impact scores: {exception}")
+    else:
+        st.dataframe(
+            feature_impact.style.format({
+                "Impact score": "{:.4f}",
+                "Score variation": "{:.4f}",
+            }),
+            hide_index=True,
+            width="stretch",
+        )
+else:
+    st.info("Run the feature-impact script to generate the ranked scores.")
+
+if FEATURE_IMPACT_CHART_PATH.is_file():
+    st.image(
+        str(FEATURE_IMPACT_CHART_PATH),
+        caption="Permutation impact scores for the best saved model",
         width="stretch",
     )

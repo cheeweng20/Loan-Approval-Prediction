@@ -7,12 +7,22 @@
     "classifier__max_depth": null,
     "classifier__min_samples_leaf": 1
   },
-  "best_cross_validation_score": 0.9841981366553977,
+  "best_cross_validation_score": 0.9687652982004676,
   "test_metrics": {
-    "accuracy": 0.9875097580015613,
-    "precision": 0.9850931677018634,
-    "recall": 0.9949811794228356,
-    "f1": 0.9900124843945068
+    "accuracy": 0.9843871975019516,
+    "precision": 0.986232790988736,
+    "recall": 0.9887076537013801,
+    "f1": 0.9874686716791979
   },
+  "selected_features": [
+    "no_of_dependents",
+    "income_annum",
+    "loan_amount",
+    "loan_term",
+    "cibil_score",
+    "residential_assets_value",
+    "luxury_assets_value",
+    "bank_asset_value"
+  ],
   "scikit_learn_version": "1.9.0"
 }

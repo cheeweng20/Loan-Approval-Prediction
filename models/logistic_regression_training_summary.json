@@ -3,15 +3,25 @@
   "cv_folds": 5,
   "selection_metric": "f1",
   "best_parameters": {
-    "classifier__C": 0.01,
+    "classifier__C": 0.1,
     "classifier__class_weight": "balanced"
   },
-  "best_cross_validation_score": 0.931522010573785,
+  "best_cross_validation_score": 0.932988531759565,
   "test_metrics": {
-    "accuracy": 0.9445745511319282,
-    "precision": 0.9827127659574468,
-    "recall": 0.9272271016311167,
-    "f1": 0.9541639767591995
+    "accuracy": 0.9398907103825137,
+    "precision": 0.9675324675324676,
+    "recall": 0.9347553324968633,
+    "f1": 0.9508615188257817
   },
+  "selected_features": [
+    "no_of_dependents",
+    "income_annum",
+    "loan_amount",
+    "loan_term",
+    "cibil_score",
+    "residential_assets_value",
+    "luxury_assets_value",
+    "bank_asset_value"
+  ],
   "scikit_learn_version": "1.9.0"
 }

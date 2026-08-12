@@ -55,23 +55,20 @@ learning demonstration but not for operational lending decisions.
 
 ## Selected model inputs
 
-Reduced-input testing selected four required model features:
+The following four columns remain after the configured exclusions and are the
+candidate inputs for model training:
 
 - `income_annum`
 - `loan_amount`
 - `loan_term`
 - `cibil_score`
 
-The following source columns are optional for descriptive analysis and excluded
-from model training and the Streamlit form:
+The following source columns are removed before feature analysis, model
+training, and the Streamlit form:
 
-- `no_of_dependents`
-- `education`
-- `self_employed`
-- `residential_assets_value`
-- `commercial_assets_value`
-- `luxury_assets_value`
-- `bank_asset_value`
+All regular input columns are now restored as feature-selection candidates.
+Only `loan_id` and `loan_status` are excluded from scoring because they are the
+identifier and target columns.
 
 `loan_id` is an identifier, while `loan_status` is the prediction target; neither
 is a model input.
@@ -83,5 +80,11 @@ Rows: 4,269
 SHA-256: 4B5CD093D178378F4CFA8C107ADB6E599B88BE9D8A3B51F3B99C0D5914154E54
 ```
 
-`src/prepare_data.py` validates this schema, creates the reproducible train-test
-split, and saves a machine-readable data summary under `data/processed/`.
+Run `src/analyze_features.py` before `src/prepare_data.py`. The analysis scores
+all regular input features with `SelectKBest(f_classif)` only on the
+reproducible training partition and saves its ranked feature report to
+`data/processed/feature_analysis.json`, plus a mark table at
+`data/processed/feature_scores.csv`. The SelectKBest score must be above 0.50
+for a feature to be selected. The model pipelines fit the same selection method
+inside cross-validation to prevent the held-out test set from influencing their
+selected features.

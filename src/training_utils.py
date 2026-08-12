@@ -8,6 +8,7 @@ import pandas as pd
 import seaborn as sns
 import sklearn
 from sklearn.compose import ColumnTransformer
+from sklearn.feature_selection import SelectKBest, f_classif
 from sklearn.metrics import (
     accuracy_score,
     classification_report,
@@ -28,6 +29,7 @@ from settings import (
     FEATURE_COLUMNS,
     NUMERIC_FEATURES,
     RANDOM_STATE,
+    FEATURE_SCORE_THRESHOLD,
 )
 
 
@@ -40,6 +42,18 @@ ARTIFACT_NAMES = (
 POSITIVE_LABEL = "Approved"
 NEGATIVE_LABEL = "Rejected"
 SELECTION_METRIC = "f1"
+
+
+class ThresholdSelectKBest(SelectKBest):
+    """Keep features whose raw F-test score exceeds the threshold."""
+
+    def __init__(self, score_func=f_classif, threshold=FEATURE_SCORE_THRESHOLD):
+        super().__init__(score_func=score_func, k="all")
+        self.threshold = threshold
+
+    def _get_support_mask(self):
+        scores = self.scores_
+        return pd.notna(scores) & (scores > self.threshold)
 
 
 def _load_artifacts(processed_dir, artifact_names):
@@ -114,10 +128,35 @@ def create_preprocessor(scale_numeric):
 
 
 def create_model_pipeline(classifier, scale_numeric):
+    """Create a leakage-safe pipeline with fold-specific feature selection."""
     return Pipeline([
         ("preprocessor", create_preprocessor(scale_numeric)),
+        (
+            "feature_selector",
+            ThresholdSelectKBest(threshold=FEATURE_SCORE_THRESHOLD),
+        ),
         ("classifier", classifier),
     ])
+
+
+def get_selected_model_features(model):
+    """Return original source features retained by the fitted SelectKBest step."""
+    preprocessor = model.named_steps["preprocessor"]
+    selector = model.named_steps["feature_selector"]
+    feature_names = preprocessor.get_feature_names_out()
+    selected_features = []
+    for transformed_feature in feature_names[selector.get_support()]:
+        original_feature = None
+        for feature in FEATURE_COLUMNS:
+            if transformed_feature == f"numeric__{feature}":
+                original_feature = feature
+                break
+            if transformed_feature.startswith(f"categorical__{feature}_"):
+                original_feature = feature
+                break
+        if original_feature and original_feature not in selected_features:
+            selected_features.append(original_feature)
+    return selected_features
 
 
 def create_grid_search(pipeline, parameter_grid):
@@ -184,7 +223,7 @@ def print_results(model_name, y_true, y_pred, metrics):
 
 
 def save_grid_search_results(
-    search, model_name, artifact_stem, output_dir, test_metrics
+    search, model_name, artifact_stem, output_dir, test_metrics, selected_features
 ):
     result_columns = [
         "rank_test_f1",
@@ -209,6 +248,7 @@ def save_grid_search_results(
         "best_parameters": search.best_params_,
         "best_cross_validation_score": search.best_score_,
         "test_metrics": test_metrics,
+        "selected_features": selected_features,
         "scikit_learn_version": sklearn.__version__,
     }
     with (output_dir / f"{artifact_stem}_training_summary.json").open(
@@ -265,9 +305,11 @@ def train_and_evaluate_model(
     for name, value in search.best_params_.items():
         print(f"  {name}: {value}")
     print_results(model_name, y_test, y_pred, metrics)
+    selected_features = get_selected_model_features(model)
+    print(f"SelectKBest retained: {', '.join(selected_features)}")
 
     save_grid_search_results(
-        search, model_name, artifact_stem, output_dir, metrics
+        search, model_name, artifact_stem, output_dir, metrics, selected_features
     )
     save_confusion_matrix(
         y_test,

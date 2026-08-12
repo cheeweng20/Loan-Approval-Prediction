@@ -1,0 +1,117 @@
+{
+  "method": "Permutation Feature Importance",
+  "rationale": "Permutation importance is model-agnostic, works on the fitted pipeline with preprocessing and SelectKBest, and measures the held-out F1 drop caused by corrupting one original feature.",
+  "selected_model": "Random Forest",
+  "model_path": "C:\\Users\\Chee Weng\\Documents\\GitHub\\Loan-Approval-Prediction\\models\\random_forest_model.joblib",
+  "scoring_metric": "approved_f1",
+  "n_repeats": 30,
+  "random_state": 42,
+  "baseline_metrics": {
+    "accuracy": 0.9843871975019516,
+    "precision": 0.986232790988736,
+    "recall": 0.9887076537013801,
+    "f1": 0.9874686716791979
+  },
+  "selected_features": [
+    "no_of_dependents",
+    "income_annum",
+    "loan_amount",
+    "loan_term",
+    "cibil_score",
+    "residential_assets_value",
+    "luxury_assets_value",
+    "bank_asset_value"
+  ],
+  "candidate_features": [
+    "no_of_dependents",
+    "education",
+    "self_employed",
+    "income_annum",
+    "loan_amount",
+    "loan_term",
+    "cibil_score",
+    "residential_assets_value",
+    "commercial_assets_value",
+    "luxury_assets_value",
+    "bank_asset_value"
+  ],
+  "impact_scores": [
+    {
+      "rank": 1,
+      "feature": "cibil_score",
+      "impact_score_mean": 0.3458414180505864,
+      "impact_score_std": 0.007281931327562215,
+      "selected_by_model": true
+    },
+    {
+      "rank": 2,
+      "feature": "loan_term",
+      "impact_score_mean": 0.04044233854817869,
+      "impact_score_std": 0.00291685601165141,
+      "selected_by_model": true
+    },
+    {
+      "rank": 3,
+      "feature": "loan_amount",
+      "impact_score_mean": 0.016882948879447135,
+      "impact_score_std": 0.002529023398193761,
+      "selected_by_model": true
+    },
+    {
+      "rank": 4,
+      "feature": "income_annum",
+      "impact_score_mean": 0.010166484750154577,
+      "impact_score_std": 0.002130316765855029,
+      "selected_by_model": true
+    },
+    {
+      "rank": 5,
+      "feature": "bank_asset_value",
+      "impact_score_mean": 0.0035280692962901742,
+      "impact_score_std": 0.0015011811320434804,
+      "selected_by_model": true
+    },
+    {
+      "rank": 6,
+      "feature": "residential_assets_value",
+      "impact_score_mean": 0.0029708198855716923,
+      "impact_score_std": 0.0012903330879514207,
+      "selected_by_model": true
+    },
+    {
+      "rank": 7,
+      "feature": "luxury_assets_value",
+      "impact_score_mean": 0.0019886032986925002,
+      "impact_score_std": 0.0014391360822688108,
+      "selected_by_model": true
+    },
+    {
+      "rank": 8,
+      "feature": "no_of_dependents",
+      "impact_score_mean": 0.001223985689920922,
+      "impact_score_std": 0.000977996135392224,
+      "selected_by_model": true
+    },
+    {
+      "rank": 9,
+      "feature": "commercial_assets_value",
+      "impact_score_mean": 0.0,
+      "impact_score_std": 0.0,
+      "selected_by_model": false
+    },
+    {
+      "rank": 10,
+      "feature": "education",
+      "impact_score_mean": 0.0,
+      "impact_score_std": 0.0,
+      "selected_by_model": false
+    },
+    {
+      "rank": 11,
+      "feature": "self_employed",
+      "impact_score_mean": 0.0,
+      "impact_score_std": 0.0,
+      "selected_by_model": false
+    }
+  ]
+}

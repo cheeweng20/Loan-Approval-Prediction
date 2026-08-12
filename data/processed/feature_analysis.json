@@ -1,0 +1,158 @@
+{
+  "method": "SelectKBest",
+  "score_function": "f_classif",
+  "k": "all",
+  "selection_threshold": 0.5,
+  "score_normalization": "none",
+  "candidate_features": [
+    "no_of_dependents",
+    "education",
+    "self_employed",
+    "income_annum",
+    "loan_amount",
+    "loan_term",
+    "cibil_score",
+    "residential_assets_value",
+    "commercial_assets_value",
+    "luxury_assets_value",
+    "bank_asset_value"
+  ],
+  "selected_features": [
+    "cibil_score",
+    "loan_term",
+    "residential_assets_value",
+    "no_of_dependents",
+    "income_annum",
+    "luxury_assets_value",
+    "bank_asset_value",
+    "loan_amount"
+  ],
+  "training_rows_used": 2988,
+  "feature_scores": [
+    {
+      "feature": "cibil_score",
+      "rank": 1,
+      "select_k_best_score": 4188.644691372292,
+      "raw_score": 4188.644691372292,
+      "transformed_features": [
+        "numeric__cibil_score"
+      ],
+      "selected": true,
+      "p_value": 0.0
+    },
+    {
+      "feature": "loan_term",
+      "rank": 2,
+      "select_k_best_score": 35.173080520866534,
+      "raw_score": 35.173080520866534,
+      "transformed_features": [
+        "numeric__loan_term"
+      ],
+      "selected": true,
+      "p_value": 3.3625714480977844e-09
+    },
+    {
+      "feature": "residential_assets_value",
+      "rank": 3,
+      "select_k_best_score": 3.7666271142337258,
+      "raw_score": 3.7666271142337258,
+      "transformed_features": [
+        "numeric__residential_assets_value"
+      ],
+      "selected": true,
+      "p_value": 0.052378961778576746
+    },
+    {
+      "feature": "no_of_dependents",
+      "rank": 4,
+      "select_k_best_score": 1.6981025511622558,
+      "raw_score": 1.6981025511622558,
+      "transformed_features": [
+        "numeric__no_of_dependents"
+      ],
+      "selected": true,
+      "p_value": 0.19263678321878708
+    },
+    {
+      "feature": "income_annum",
+      "rank": 5,
+      "select_k_best_score": 1.620507938172274,
+      "raw_score": 1.620507938172274,
+      "transformed_features": [
+        "numeric__income_annum"
+      ],
+      "selected": true,
+      "p_value": 0.20312007743860652
+    },
+    {
+      "feature": "luxury_assets_value",
+      "rank": 6,
+      "select_k_best_score": 1.1057648623314453,
+      "raw_score": 1.1057648623314453,
+      "transformed_features": [
+        "numeric__luxury_assets_value"
+      ],
+      "selected": true,
+      "p_value": 0.2930895201746621
+    },
+    {
+      "feature": "bank_asset_value",
+      "rank": 7,
+      "select_k_best_score": 0.7459678180113483,
+      "raw_score": 0.7459678180113483,
+      "transformed_features": [
+        "numeric__bank_asset_value"
+      ],
+      "selected": true,
+      "p_value": 0.38782522350503246
+    },
+    {
+      "feature": "loan_amount",
+      "rank": 8,
+      "select_k_best_score": 0.66311880772553,
+      "raw_score": 0.66311880772553,
+      "transformed_features": [
+        "numeric__loan_amount"
+      ],
+      "selected": true,
+      "p_value": 0.41552597711334993
+    },
+    {
+      "feature": "education",
+      "rank": 9,
+      "select_k_best_score": 0.02954460076103503,
+      "raw_score": 0.02954460076103503,
+      "transformed_features": [
+        "categorical__education_Graduate",
+        "categorical__education_Not Graduate"
+      ],
+      "selected": false,
+      "p_value": 0.8635392496391672
+    },
+    {
+      "feature": "self_employed",
+      "rank": 10,
+      "select_k_best_score": 0.017315195025771047,
+      "raw_score": 0.017315195025771047,
+      "transformed_features": [
+        "categorical__self_employed_No",
+        "categorical__self_employed_Yes"
+      ],
+      "selected": false,
+      "p_value": 0.8953196639636808
+    },
+    {
+      "feature": "commercial_assets_value",
+      "rank": 11,
+      "select_k_best_score": 0.0013846964223329305,
+      "raw_score": 0.0013846964223329305,
+      "transformed_features": [
+        "numeric__commercial_assets_value"
+      ],
+      "selected": false,
+      "p_value": 0.9703188493194499
+    }
+  ],
+  "excluded_source_features": [],
+  "source_sha256": "4b5cd093d178378f4cfa8c107adb6e599b88be9d8a3b51f3b99c0d5914154e54"
+}

@@ -7,20 +7,30 @@
     "Approved": 2656,
     "Rejected": 1613
   },
-  "selected_features": [
-    "income_annum",
-    "loan_amount",
-    "loan_term",
-    "cibil_score"
-  ],
-  "excluded_source_features": [
+  "candidate_features": [
     "no_of_dependents",
     "education",
     "self_employed",
+    "income_annum",
+    "loan_amount",
+    "loan_term",
+    "cibil_score",
     "residential_assets_value",
     "commercial_assets_value",
     "luxury_assets_value",
     "bank_asset_value"
   ],
+  "select_k_best_features": [
+    "cibil_score",
+    "loan_term",
+    "residential_assets_value",
+    "no_of_dependents",
+    "income_annum",
+    "luxury_assets_value",
+    "bank_asset_value",
+    "loan_amount"
+  ],
+  "excluded_source_features": [],
+  "feature_analysis_file": "feature_analysis.json",
   "quality_warnings": []
 }
