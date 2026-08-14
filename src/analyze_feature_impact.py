@@ -27,8 +27,6 @@ from settings import (
     RANDOM_STATE,
 )
 from training_utils import (
-    POSITIVE_LABEL,
-    calculate_metrics,
     get_selected_model_features,
     load_test_data,
 )
@@ -37,6 +35,10 @@ from training_utils import (
 MODEL_ARTIFACTS = {
     "Logistic Regression": "logistic_regression_model.joblib",
     "Random Forest": "random_forest_model.joblib",
+}
+SUMMARY_ARTIFACTS = {
+    "Logistic Regression": "logistic_regression_training_summary.json",
+    "Random Forest": "random_forest_training_summary.json",
 }
 COMPARISON_TABLE_PATH = MODELS_DIR / "comparison_table.csv"
 SCORING_METRIC = "approved_f1"
@@ -99,6 +101,27 @@ def calculate_permutation_impacts(model, X_test, y_test):
     return impacts
 
 
+def load_baseline_metrics(model_name):
+    summary_name = SUMMARY_ARTIFACTS[model_name]
+    summary_path = MODELS_DIR / summary_name
+    if not summary_path.is_file():
+        raise FileNotFoundError(
+            f"Missing training summary file for {model_name}: {summary_path}"
+        )
+    with summary_path.open("r", encoding="utf-8") as file:
+        summary = json.load(file)
+    test_metrics = summary.get("test_metrics")
+    if not isinstance(test_metrics, dict):
+        raise ValueError(f"{summary_name} is missing a valid test_metrics object.")
+    required_metrics = ("accuracy", "precision", "recall", "f1")
+    missing_metrics = [metric for metric in required_metrics if metric not in test_metrics]
+    if missing_metrics:
+        raise ValueError(
+            f"{summary_name} is missing metrics: {', '.join(missing_metrics)}."
+        )
+    return {metric: float(test_metrics[metric]) for metric in required_metrics}
+
+
 def save_impact_chart(impacts, output_path):
     """Save a compact horizontal bar chart for the ranked impact scores."""
     chart_data = impacts.sort_values("impact_score_mean", ascending=True)
@@ -128,8 +151,7 @@ def main():
     X_test, y_test = load_test_data(PROCESSED_DATA_DIR)
     model = joblib.load(model_path)
 
-    baseline_predictions = model.predict(X_test)
-    baseline_metrics = calculate_metrics(y_test, baseline_predictions)
+    baseline_metrics = load_baseline_metrics(model_name)
     selected_features = get_selected_model_features(model)
 
     impacts = calculate_permutation_impacts(model, X_test, y_test)

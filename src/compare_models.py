@@ -1,33 +1,47 @@
 """Compare the trained Logistic Regression and Random Forest models."""
 
-import joblib
+import json
+
 import matplotlib.pyplot as plt
 import pandas as pd
 
-from settings import MODELS_DIR, PROCESSED_DATA_DIR
-from training_utils import calculate_metrics, load_test_data
+from settings import MODELS_DIR
+
+
+MODEL_SUMMARIES = {
+    "Logistic Regression": MODELS_DIR / "logistic_regression_training_summary.json",
+    "Random Forest": MODELS_DIR / "random_forest_training_summary.json",
+}
+REQUIRED_METRICS = ("accuracy", "precision", "recall", "f1")
+
+
+def load_metrics_from_summary(model_name, summary_path):
+    if not summary_path.is_file():
+        raise FileNotFoundError(
+            f"Missing training summary for {model_name}: {summary_path}. "
+            "Train both models first."
+        )
+    with summary_path.open("r", encoding="utf-8") as file:
+        summary = json.load(file)
+    test_metrics = summary.get("test_metrics")
+    if not isinstance(test_metrics, dict):
+        raise ValueError(
+            f"{summary_path.name} is missing a valid test_metrics object."
+        )
+    missing_metrics = [metric for metric in REQUIRED_METRICS if metric not in test_metrics]
+    if missing_metrics:
+        raise ValueError(
+            f"{summary_path.name} is missing metrics: {', '.join(missing_metrics)}."
+        )
+    return {metric: float(test_metrics[metric]) for metric in REQUIRED_METRICS}
 
 
 def main():
-    model_paths = {
-        "Logistic Regression": MODELS_DIR / "logistic_regression_model.joblib",
-        "Random Forest": MODELS_DIR / "random_forest_model.joblib",
-    }
-    missing = [path.name for path in model_paths.values() if not path.is_file()]
-    if missing:
-        raise FileNotFoundError(
-            f"Missing trained models in {MODELS_DIR}: {', '.join(missing)}. "
-            "Train both models first."
-        )
-
-    X_test, y_test = load_test_data(PROCESSED_DATA_DIR)
     results = []
-    for model_name, model_path in model_paths.items():
-        model = joblib.load(model_path)
-        predictions = model.predict(X_test)
+    for model_name, summary_path in MODEL_SUMMARIES.items():
         results.append({
             "model": model_name,
-            **calculate_metrics(y_test, predictions),
+            **load_metrics_from_summary(model_name, summary_path),
         })
 
     comparison = pd.DataFrame(results).sort_values("f1", ascending=False)
