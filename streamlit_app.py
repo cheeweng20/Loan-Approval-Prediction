@@ -10,6 +10,7 @@ from pathlib import Path
 import joblib
 import pandas as pd
 import streamlit as st
+from streamlit_option_menu import option_menu
 
 SRC_DIR = Path(__file__).resolve().parent / "src"
 if str(SRC_DIR) not in sys.path:
@@ -18,6 +19,9 @@ import training_utils  # noqa: F401
 
 from src.settings import (
     FEATURE_COLUMNS,
+    NUMERIC_FEATURES,
+    CATEGORICAL_FEATURES,
+    FEATURE_SCORE_THRESHOLD,
     FEATURE_IMPACT_CHART_PATH,
     FEATURE_IMPACT_TABLE_PATH,
     MODELS_DIR,
@@ -45,6 +49,49 @@ FEATURE_IMPACT_COLUMNS = (
     "selected_by_model",
 )
 
+# ---------------------------------------------------------------------------
+# Field-rendering config (shared by required + optional input blocks)
+# ---------------------------------------------------------------------------
+# feature -> (min, max, step, caster)
+NUMERIC_BOUNDS = {
+    "no_of_dependents": (0, 20, 1, int),
+    "loan_term": (1, 40, 1, int),
+    "cibil_score": (300, 900, 1, int),
+}
+DEFAULT_NUMERIC_BOUNDS = (0.0, 100_000_000.0, 100_000.0, float)
+
+DEFAULTS = {
+    "income_annum": 5_000_000.0,
+    "loan_amount": 15_000_000.0,
+    "loan_term": 10,
+    "no_of_dependents": 0,
+    "cibil_score": 600,
+    "residential_assets_value": 0.0,
+    "commercial_assets_value": 0.0,
+    "luxury_assets_value": 0.0,
+    "bank_asset_value": 0.0,
+    "education": "Graduate",
+    "self_employed": "No",
+}
+
+
+def render_numeric_input(container, feature, default):
+    """Render a number_input with bounds looked up from NUMERIC_BOUNDS."""
+    min_val, max_val, step, caster = NUMERIC_BOUNDS.get(feature, DEFAULT_NUMERIC_BOUNDS)
+    label = feature.replace("_", " ").title()
+    return container.number_input(
+        label, min_value=min_val, max_value=max_val, value=caster(default), step=step
+    )
+
+
+def render_categorical_input(container, feature):
+    """Render a selectbox for a known categorical feature."""
+    if feature == "education":
+        return container.selectbox("Education", options=["Graduate", "Not Graduate"], index=0)
+    if feature == "self_employed":
+        return container.selectbox("Self-employed", options=["No", "Yes"], index=0)
+    raise ValueError(f"Unknown categorical feature: {feature}")
+
 
 @st.cache_resource
 def load_models():
@@ -59,6 +106,7 @@ def load_models():
     return models
 
 
+@st.cache_data
 def load_comparison_table():
     table = pd.read_csv(COMPARISON_TABLE_PATH)
     missing_columns = set(COMPARISON_COLUMNS) - set(table.columns)
@@ -76,21 +124,71 @@ def load_comparison_table():
     })
 
 
+@st.cache_data
 def load_feature_impact_table():
-    table = pd.read_csv(FEATURE_IMPACT_TABLE_PATH)
-    missing_columns = set(FEATURE_IMPACT_COLUMNS) - set(table.columns)
-    if missing_columns:
-        raise ValueError(
-            "The feature impact table is missing columns: "
-            f"{', '.join(sorted(missing_columns))}."
-        )
-    return table[list(FEATURE_IMPACT_COLUMNS)].rename(columns={
-        "rank": "Rank",
-        "feature": "Feature",
-        "impact_score_mean": "Impact score",
-        "impact_score_std": "Score variation",
-        "selected_by_model": "Selected",
-    })
+    """Load the feature-impact CSV and normalize column names.
+
+    Returns a DataFrame with columns: Rank, Feature, Impact score, Score variation, Selected
+    """
+    if not FEATURE_IMPACT_TABLE_PATH.is_file():
+        raise FileNotFoundError(f"Feature impact table not found: {FEATURE_IMPACT_TABLE_PATH}")
+    df = pd.read_csv(FEATURE_IMPACT_TABLE_PATH)
+    cols_map = {c.lower(): c for c in df.columns}
+
+    # detect sensible columns
+    feature_col = cols_map.get("feature") or next((orig for k, orig in cols_map.items() if "feature" in k), None)
+    rank_col = cols_map.get("rank") or next((orig for k, orig in cols_map.items() if "rank" in k), None)
+
+    score_col = None
+    for cand in ("impact_score_mean", "impact_score", "select_k_best_score", "raw_score", "score"):
+        if cand in cols_map:
+            score_col = cols_map[cand]
+            break
+    if not score_col:
+        score_col = next((orig for k, orig in cols_map.items() if "score" in k), None)
+
+    std_col = next((orig for k, orig in cols_map.items() if "std" in k or "variation" in k), None)
+    selected_col = cols_map.get("selected") or next((orig for k, orig in cols_map.items() if "selected" in k), None)
+
+    out = pd.DataFrame()
+    out["Rank"] = df[rank_col] if rank_col and rank_col in df.columns else range(1, len(df) + 1)
+    out["Feature"] = df[feature_col].astype(str) if feature_col and feature_col in df.columns else df.iloc[:, 0].astype(str)
+    out["Impact score"] = pd.to_numeric(df[score_col], errors="coerce") if score_col and score_col in df.columns else None
+    out["Score variation"] = pd.to_numeric(df[std_col], errors="coerce") if std_col and std_col in df.columns else None
+    out["Selected"] = df[selected_col].astype(str) if selected_col and selected_col in df.columns else None
+
+    return out[["Rank", "Feature", "Impact score", "Score variation", "Selected"]]
+
+
+@st.cache_data
+def _get_selected_features_from_analysis():
+    """Return features flagged as selected in the feature-impact CSV.
+
+    Falls back to features with select_k_best_score > FEATURE_SCORE_THRESHOLD,
+    then to the full FEATURE_COLUMNS list if parsing fails.
+    """
+    if FEATURE_IMPACT_TABLE_PATH.is_file():
+        try:
+            df = pd.read_csv(FEATURE_IMPACT_TABLE_PATH)
+            cols = {c.lower(): c for c in df.columns}
+            feature_col = cols.get("feature") or next((orig for k, orig in cols.items() if "feature" in k), None)
+            selected_col = cols.get("selected") or next((orig for k, orig in cols.items() if "selected" in k), None)
+            if feature_col and selected_col:
+                mask = df[selected_col].astype(str).str.lower().isin(["true", "1", "yes"])
+                selected = df.loc[mask, feature_col].astype(str).tolist()
+                if selected:
+                    return selected
+            # fallback: look for a select/score column
+            score_col = next((orig for k, orig in cols.items() if "select" in k and "score" in k), None)
+            if not score_col:
+                score_col = next((orig for k, orig in cols.items() if "score" in k), None)
+            if feature_col and score_col:
+                selected = df.loc[pd.to_numeric(df[score_col], errors="coerce") > FEATURE_SCORE_THRESHOLD, feature_col].astype(str).tolist()
+                if selected:
+                    return selected
+        except Exception:
+            pass
+    return list(FEATURE_COLUMNS)
 
 
 def build_application_data(values):
@@ -116,117 +214,192 @@ st.set_page_config(
     layout="wide",
 )
 
-st.title("🏦 Loan Approval Prediction")
-st.write(
-    "Enter an applicant's financial and loan information to compare predictions "
-    "from Logistic Regression and Random Forest."
-)
-with st.form("loan_application_form"):
-    financial_column, credit_column = st.columns(2)
-    with financial_column:
-        st.subheader("Financial and loan details")
-        income_annum = st.number_input(
-            "Annual income",
-            min_value=100_000,
-            max_value=100_000_000,
-            value=5_000_000,
-            step=100_000,
-            help="Use the same monetary units as the training dataset.",
-        )
-        loan_amount = st.number_input(
-            "Loan amount",
-            min_value=100_000,
-            max_value=100_000_000,
-            value=15_000_000,
-            step=100_000,
-        )
-        loan_term = st.number_input(
-            "Loan term", min_value=1, max_value=40, value=10, step=1
-        )
+# ---------------------------------------------------------------------------
+# Sidebar
+# ---------------------------------------------------------------------------
+PAGES = ["Predict", "Model comparison", "Feature impact"]
+PAGE_ICONS = ["bank", "bar-chart-line", "bullseye"]  # Bootstrap Icons names
 
-    with credit_column:
-        st.subheader("Credit details")
-        cibil_score = st.number_input(
-            "CIBIL score", min_value=300, max_value=900, value=600, step=1
-        )
-
-    submitted = st.form_submit_button(
-        "Predict loan status", type="primary", width="stretch"
+with st.sidebar:
+    st.markdown(
+        """
+        <div style="display:flex; align-items:center; gap:10px; padding:4px 4px 16px 4px;">
+            <div style="background:#fff; border-radius:10px; width:34px; height:34px;
+                        display:flex; align-items:center; justify-content:center;
+                        font-weight:700; font-size:18px; color:#000;">🏦</div>
+            <span style="font-size:22px; font-weight:600; color:#fff;">Loan Approval</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
-if submitted:
-    application = build_application_data({
-        "income_annum": income_annum,
-        "loan_amount": loan_amount,
-        "loan_term": loan_term,
-        "cibil_score": cibil_score,
-    })
-    try:
-        predictions = predict_application(application)
-    except FileNotFoundError:
-        st.error(
-            "The trained model files are missing. Run data preparation and both "
-            "training scripts first."
-        )
-    except (OSError, TypeError, ValueError, AttributeError) as exception:
-        st.error(f"Could not load compatible model files: {exception}")
-    else:
-        st.subheader("Prediction")
-        result_columns = st.columns(len(predictions))
-        for column, (model_name, predicted_label) in zip(
-            result_columns, predictions.items()
-        ):
-            column.metric(model_name, predicted_label.upper())
+    page = option_menu(
+        menu_title=None,
+        options=PAGES,
+        icons=PAGE_ICONS,
+        default_index=0,
+        styles={
+            "container": {"padding": "0", "background-color": "transparent"},
+            "icon": {"font-size": "16px"},
+            "nav-link": {
+                "font-size": "15px",
+                "text-align": "left",
+                "margin": "4px 0",
+                "padding": "10px 14px",
+                "border-radius": "10px",
+                "color": "#e6e6e6",
+            },
+            "nav-link-selected": {
+                "background-color": "#0d6efd",
+                "color": "#fff",
+                "font-weight": "500",
+            },
+        },
+    )
 
-st.divider()
-st.subheader("Model comparison")
-if COMPARISON_TABLE_PATH.is_file():
-    try:
-        comparison = load_comparison_table()
-    except (OSError, UnicodeError, ValueError, pd.errors.ParserError) as exception:
-        st.warning(f"Could not read the saved model comparison: {exception}")
+    st.markdown("<div style='margin-top:12px;'></div>", unsafe_allow_html=True)
+    if "models_ok" not in st.session_state:
+        try:
+            load_models()
+            st.session_state.models_ok = True
+        except Exception:
+            st.session_state.models_ok = False
+
+    if st.session_state.models_ok:
+        st.success("Models loaded", icon="✅")
     else:
-        st.dataframe(
-            comparison.style.format({
-                column: "{:.4f}"
-                for column in comparison.columns
-                if column != "Model"
-            }),
-            hide_index=True,
+        st.error("Models not found", icon="⚠️")
+
+
+def page_predict():
+    st.title("🏦 Loan Approval Prediction")
+    st.write(
+        "Enter an applicant's information to compare predictions from Logistic Regression and Random Forest."
+    )
+
+    selected_features = _get_selected_features_from_analysis()
+    selected_set = set(selected_features)
+
+    with st.form("loan_application_form"):
+        st.markdown("**Required inputs (selected by feature analysis)**")
+        cols = st.columns(3)
+        inputs = {}
+
+        selected_numeric = [f for f in selected_features if f in NUMERIC_FEATURES]
+        for i, feature in enumerate(selected_numeric):
+            col = cols[i % len(cols)]
+            inputs[feature] = render_numeric_input(col, feature, DEFAULTS.get(feature, 0.0))
+
+        selected_categorical = [f for f in selected_features if f in CATEGORICAL_FEATURES]
+        for j, feature in enumerate(selected_categorical):
+            col = cols[(len(selected_numeric) + j) % len(cols)]
+            inputs[feature] = render_categorical_input(col, feature)
+
+        st.markdown("**Optional inputs (not required by SelectKBest)** — defaults will be used if left unchanged")
+        with st.expander("Show optional fields", expanded=False):
+            for feature in FEATURE_COLUMNS:
+                if feature in selected_set:
+                    continue
+                if feature in NUMERIC_FEATURES:
+                    inputs[feature] = render_numeric_input(st, feature, DEFAULTS.get(feature, 0.0))
+                else:
+                    inputs[feature] = render_categorical_input(st, feature)
+
+        submitted = st.form_submit_button("Predict loan status")
+
+    if submitted:
+        application = {}
+        for feature in FEATURE_COLUMNS:
+            val = inputs.get(feature, DEFAULTS.get(feature))
+            if feature in NUMERIC_FEATURES:
+                if feature in ("no_of_dependents", "loan_term", "cibil_score"):
+                    application[feature] = int(val)
+                else:
+                    application[feature] = float(val)
+            else:
+                application[feature] = str(val)
+
+        try:
+            application_df = build_application_data(application)
+            predictions = predict_application(application_df)
+        except FileNotFoundError:
+            st.error(
+                "The trained model files are missing. Run data preparation and both "
+                "training scripts first."
+            )
+        except (OSError, TypeError, ValueError, AttributeError) as exception:
+            st.error(f"Could not load compatible model files or build application: {exception}")
+        else:
+            st.subheader("Prediction")
+            result_columns = st.columns(len(predictions))
+            for column, (model_name, predicted_label) in zip(result_columns, predictions.items()):
+                column.metric(model_name, predicted_label.upper())
+
+
+def page_model_comparison():
+    st.header("Model comparison")
+    if COMPARISON_TABLE_PATH.is_file():
+        try:
+            comparison = load_comparison_table()
+        except (OSError, UnicodeError, ValueError, pd.errors.ParserError) as exception:
+            st.warning(f"Could not read the saved model comparison: {exception}")
+        else:
+            st.dataframe(
+                comparison.style.format({
+                    column: "{:.4f}"
+                    for column in comparison.columns
+                    if column != "Model"
+                }),
+                hide_index=True,
+                width="stretch",
+            )
+    else:
+        st.info("Run the model-comparison script to generate the results table.")
+
+    if COMPARISON_CHART_PATH.is_file():
+        st.image(
+            str(COMPARISON_CHART_PATH),
+            caption="Logistic Regression and Random Forest test-set performance",
             width="stretch",
         )
-else:
-    st.info("Run the model-comparison script to generate the results table.")
 
-if COMPARISON_CHART_PATH.is_file():
-    st.image(
-        str(COMPARISON_CHART_PATH),
-        caption="Logistic Regression and Random Forest test-set performance",
-        width="stretch",
-    )
 
-st.divider()
-st.subheader("Feature impact")
-if FEATURE_IMPACT_TABLE_PATH.is_file():
-    try:
-        feature_impact = load_feature_impact_table()
-    except (OSError, UnicodeError, ValueError, pd.errors.ParserError) as exception:
-        st.warning(f"Could not read the saved feature impact scores: {exception}")
+def page_feature_impact():
+    st.header("Feature impact")
+    if FEATURE_IMPACT_TABLE_PATH.is_file():
+        try:
+            table = load_feature_impact_table()
+        except (OSError, UnicodeError, ValueError, pd.errors.ParserError) as exception:
+            st.warning(f"Could not read the saved feature impact scores: {exception}")
+            try:
+                raw = pd.read_csv(FEATURE_IMPACT_TABLE_PATH)
+                st.dataframe(raw, hide_index=True)
+            except Exception as e:
+                st.error(f"Could not load feature impact CSV: {e}")
+        else:
+            st.dataframe(
+                table.style.format({
+                    "Impact score": "{:.4f}",
+                    "Score variation": "{:.4f}",
+                }),
+                hide_index=True,
+                width="stretch",
+            )
     else:
-        st.dataframe(
-            feature_impact.style.format({
-                "Impact score": "{:.4f}",
-                "Score variation": "{:.4f}",
-            }),
-            hide_index=True,
+        st.info("Run the feature-impact script to generate the ranked scores.")
+
+    if FEATURE_IMPACT_CHART_PATH.is_file():
+        st.image(
+            str(FEATURE_IMPACT_CHART_PATH),
+            caption="Permutation impact scores for the best saved model",
             width="stretch",
         )
-else:
-    st.info("Run the feature-impact script to generate the ranked scores.")
 
-if FEATURE_IMPACT_CHART_PATH.is_file():
-    st.image(
-        str(FEATURE_IMPACT_CHART_PATH),
-        caption="Permutation impact scores for the best saved model",
-        width="stretch",
-    )
+
+# Route to selected page
+if page == "Predict":
+    page_predict()
+elif page == "Model comparison":
+    page_model_comparison()
+else:
+    page_feature_impact()
