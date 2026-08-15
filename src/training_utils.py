@@ -42,6 +42,7 @@ ARTIFACT_NAMES = (
 POSITIVE_LABEL = "Approved"
 NEGATIVE_LABEL = "Rejected"
 SELECTION_METRIC = "f1"
+METRIC_NAMES = ("accuracy", "precision", "recall", "f1")
 
 
 class ThresholdSelectKBest(SelectKBest):
@@ -127,6 +128,16 @@ def create_preprocessor(scale_numeric):
     )
 
 
+def get_original_feature_name(transformed_feature):
+    """Map a preprocessor output name back to its source feature."""
+    for feature in FEATURE_COLUMNS:
+        if transformed_feature == f"numeric__{feature}":
+            return feature
+        if transformed_feature.startswith(f"categorical__{feature}_"):
+            return feature
+    raise ValueError(f"Cannot map transformed feature: {transformed_feature}")
+
+
 def create_model_pipeline(classifier, scale_numeric):
     """Create a leakage-safe pipeline with fold-specific feature selection."""
     return Pipeline([
@@ -146,17 +157,27 @@ def get_selected_model_features(model):
     feature_names = preprocessor.get_feature_names_out()
     selected_features = []
     for transformed_feature in feature_names[selector.get_support()]:
-        original_feature = None
-        for feature in FEATURE_COLUMNS:
-            if transformed_feature == f"numeric__{feature}":
-                original_feature = feature
-                break
-            if transformed_feature.startswith(f"categorical__{feature}_"):
-                original_feature = feature
-                break
-        if original_feature and original_feature not in selected_features:
+        original_feature = get_original_feature_name(transformed_feature)
+        if original_feature not in selected_features:
             selected_features.append(original_feature)
     return selected_features
+
+
+def load_test_metrics(summary_path):
+    """Load and validate final test metrics from a training summary."""
+    if not summary_path.is_file():
+        raise FileNotFoundError(f"Missing training summary: {summary_path}")
+    with summary_path.open("r", encoding="utf-8") as file:
+        summary = json.load(file)
+    test_metrics = summary.get("test_metrics")
+    if not isinstance(test_metrics, dict):
+        raise ValueError(f"{summary_path.name} is missing a valid test_metrics object.")
+    missing = [name for name in METRIC_NAMES if name not in test_metrics]
+    if missing:
+        raise ValueError(
+            f"{summary_path.name} is missing metrics: {', '.join(missing)}."
+        )
+    return {name: float(test_metrics[name]) for name in METRIC_NAMES}
 
 
 def create_grid_search(pipeline, parameter_grid):
@@ -186,7 +207,7 @@ def create_grid_search(pipeline, parameter_grid):
         },
         refit=SELECTION_METRIC,
         cv=cross_validation,
-        n_jobs=-1,
+        n_jobs=1,
         return_train_score=False,
         verbose=1,
     )

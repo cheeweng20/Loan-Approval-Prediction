@@ -164,7 +164,16 @@ def validate_and_clean_data(data):
         )
     cleaned = cleaned.drop_duplicates(subset=duplicate_subset).reset_index(drop=True)
 
-    cleaned.attrs["quality_warnings"] = []
+    quality_warnings = []
+    negative_residential_assets = int(
+        (cleaned["residential_assets_value"] < 0).sum()
+    )
+    if negative_residential_assets:
+        quality_warnings.append(
+            f"Retained {negative_residential_assets} rows with negative "
+            "residential_assets_value values from the source dataset."
+        )
+    cleaned.attrs["quality_warnings"] = quality_warnings
     cleaned.attrs["removed_duplicate_rows"] = original_rows - len(cleaned)
     return cleaned
 
@@ -249,7 +258,7 @@ def main():
     print(f"Loaded {len(raw_data):,} rows; using {len(data):,} validated rows.")
     print(data[TARGET_COLUMN].value_counts())
     print(
-        "Selected model inputs: "
+        "Candidate model inputs: "
         f"{', '.join(FEATURE_COLUMNS)}"
     )
     if excluded_features:

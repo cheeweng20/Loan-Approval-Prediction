@@ -12,11 +12,9 @@ Usage:
 import json
 
 import pandas as pd
-from sklearn.compose import ColumnTransformer
 from sklearn.feature_selection import SelectKBest, f_classif
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
 from prepare_data import (
     load_loan_data,
@@ -24,46 +22,24 @@ from prepare_data import (
     validate_and_clean_data,
 )
 from settings import (
-    CATEGORICAL_FEATURES,
     DATA_PATH,
     FEATURE_ANALYSIS_PATH,
     FEATURE_COLUMNS,
     FEATURE_SCORE_TABLE_PATH,
     FEATURE_SCORE_THRESHOLD,
-    NUMERIC_FEATURES,
     RANDOM_STATE,
     TARGET_COLUMN,
     TEST_SIZE,
 )
+from training_utils import create_preprocessor, get_original_feature_name
 
 
 def create_scoring_pipeline():
     """Create preprocessing plus SelectKBest for all configured features."""
-    preprocessor = ColumnTransformer(
-        transformers=[
-            ("numeric", StandardScaler(), list(NUMERIC_FEATURES)),
-            (
-                "categorical",
-                OneHotEncoder(handle_unknown="ignore", sparse_output=False),
-                list(CATEGORICAL_FEATURES),
-            ),
-        ],
-        remainder="drop",
-    )
     return Pipeline([
-        ("preprocessor", preprocessor),
+        ("preprocessor", create_preprocessor(scale_numeric=True)),
         ("selector", SelectKBest(score_func=f_classif, k="all")),
     ])
-
-
-def get_original_feature_name(transformed_feature):
-    """Map transformed feature names back to the source feature."""
-    for feature in FEATURE_COLUMNS:
-        if transformed_feature == f"numeric__{feature}":
-            return feature
-        if transformed_feature.startswith(f"categorical__{feature}_"):
-            return feature
-    raise ValueError(f"Cannot map transformed feature: {transformed_feature}")
 
 
 def summarize_original_feature_scores(pipeline):

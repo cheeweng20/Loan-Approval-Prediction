@@ -12,7 +12,7 @@ not be used for real lending.
 
 - Reproducible data preprocessing and train/test split
 - Two model pipelines: Logistic Regression and Random Forest
-- Training-only feature selection with SelectKBest
+- Training-only feature selection with a custom SelectKBest-based threshold
 - Post-training permutation impact scores for the best model
 - Grid search with 5-fold stratified CV, selecting by Approved-class F1-score
 - Streamlit demo for interactive predictions
@@ -79,10 +79,10 @@ and provenance notes.
   0.50 are marked as selected in this report.
 - `prepare_data.py` requires that analysis report, validates ranges, and creates
   a stratified 70:30 train/test split saved to `data/processed/`.
-- Both model pipelines apply `SelectKBest` after their preprocessing step inside
-  cross-validation, so the final selected features are fitted without test-data
-  leakage. Logistic Regression standardizes numeric features; Random Forest
-  passes them through unchanged.
+- Both model pipelines apply the threshold-based selector after preprocessing
+  inside cross-validation, so the final selected features are fitted without
+  test-data leakage. Logistic Regression standardizes numeric features; Random
+  Forest passes them through unchanged.
 - `analyze_feature_impact.py` selects the model with the best saved F1-score
   and calculates permutation importance on the held-out test set. The impact
   score is the F1-score drop after one original feature column is shuffled.

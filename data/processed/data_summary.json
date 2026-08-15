@@ -32,5 +32,7 @@
   ],
   "excluded_source_features": [],
   "feature_analysis_file": "feature_analysis.json",
-  "quality_warnings": []
+  "quality_warnings": [
+    "Retained 28 rows with negative residential_assets_value values from the source dataset."
+  ]
 }

@@ -45,8 +45,8 @@ learning demonstration but not for operational lending decisions.
 - All `loan_id` values are unique, and the identifier is never used as a model
   feature.
 - Twenty-eight rows contain `residential_assets_value = -100000`. This anomaly
-  remains documented in the original CSV, but the asset column is not used by
-  the final models.
+  remains documented in the original CSV. The value is preserved, and the
+  feature is retained by the current fitted models.
 - No imputation or SMOTE is applied. The dataset contains no missing values, and
   its class imbalance is moderate. Stratification and precision, recall, and
   F1-score are used instead.
@@ -55,20 +55,22 @@ learning demonstration but not for operational lending decisions.
 
 ## Selected model inputs
 
-The following four columns remain after the configured exclusions and are the
-candidate inputs for model training:
+All eleven regular applicant columns are passed to the model pipelines as
+feature-selection candidates. The current fitted pipelines retain these eight
+features:
 
+- `no_of_dependents`
 - `income_annum`
 - `loan_amount`
 - `loan_term`
 - `cibil_score`
+- `residential_assets_value`
+- `luxury_assets_value`
+- `bank_asset_value`
 
-The following source columns are removed before feature analysis, model
-training, and the Streamlit form:
-
-All regular input columns are now restored as feature-selection candidates.
-Only `loan_id` and `loan_status` are excluded from scoring because they are the
-identifier and target columns.
+The current selector removes `education`, `self_employed`, and
+`commercial_assets_value` because their training-only ANOVA F-scores do not
+exceed the configured threshold of 0.50.
 
 `loan_id` is an identifier, while `loan_status` is the prediction target; neither
 is a model input.
@@ -81,10 +83,10 @@ SHA-256: 4B5CD093D178378F4CFA8C107ADB6E599B88BE9D8A3B51F3B99C0D5914154E54
 ```
 
 Run `src/analyze_features.py` before `src/prepare_data.py`. The analysis scores
-all regular input features with `SelectKBest(f_classif)` only on the
+all regular input features with `f_classif` only on the
 reproducible training partition and saves its ranked feature report to
 `data/processed/feature_analysis.json`, plus a mark table at
-`data/processed/feature_scores.csv`. The SelectKBest score must be above 0.50
-for a feature to be selected. The model pipelines fit the same selection method
-inside cross-validation to prevent the held-out test set from influencing their
-selected features.
+`data/processed/feature_scores.csv`. A raw score must be above 0.50 for a
+feature to be selected. The model pipelines fit the same custom
+SelectKBest-based threshold method inside cross-validation to prevent the
+held-out test set from influencing their selected features.

@@ -15,25 +15,20 @@ from streamlit_option_menu import option_menu
 SRC_DIR = Path(__file__).resolve().parent / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
-import training_utils  # noqa: F401
+import training_utils
 
 from src.settings import (
-    FEATURE_COLUMNS,
-    NUMERIC_FEATURES,
+    COMPARISON_CHART_PATH,
+    COMPARISON_TABLE_PATH,
     CATEGORICAL_FEATURES,
-    FEATURE_SCORE_THRESHOLD,
+    FEATURE_COLUMNS,
     FEATURE_IMPACT_CHART_PATH,
     FEATURE_IMPACT_TABLE_PATH,
-    MODELS_DIR,
+    MODEL_PATHS,
+    NUMERIC_FEATURES,
 )
 
 
-MODEL_PATHS = {
-    "Logistic Regression": MODELS_DIR / "logistic_regression_model.joblib",
-    "Random Forest": MODELS_DIR / "random_forest_model.joblib",
-}
-COMPARISON_TABLE_PATH = MODELS_DIR / "comparison_table.csv"
-COMPARISON_CHART_PATH = MODELS_DIR / "comparison_chart.png"
 COMPARISON_COLUMNS = (
     "model",
     "accuracy",
@@ -49,9 +44,6 @@ FEATURE_IMPACT_COLUMNS = (
     "selected_by_model",
 )
 
-# ---------------------------------------------------------------------------
-# Field-rendering config (shared by required + optional input blocks)
-# ---------------------------------------------------------------------------
 # feature -> (min, max, step, caster)
 NUMERIC_BOUNDS = {
     "no_of_dependents": (0, 20, 1, int),
@@ -126,69 +118,38 @@ def load_comparison_table():
 
 @st.cache_data
 def load_feature_impact_table():
-    """Load the feature-impact CSV and normalize column names.
-
-    Returns a DataFrame with columns: Rank, Feature, Impact score, Score variation, Selected
-    """
-    if not FEATURE_IMPACT_TABLE_PATH.is_file():
-        raise FileNotFoundError(f"Feature impact table not found: {FEATURE_IMPACT_TABLE_PATH}")
-    df = pd.read_csv(FEATURE_IMPACT_TABLE_PATH)
-    cols_map = {c.lower(): c for c in df.columns}
-
-    # detect sensible columns
-    feature_col = cols_map.get("feature") or next((orig for k, orig in cols_map.items() if "feature" in k), None)
-    rank_col = cols_map.get("rank") or next((orig for k, orig in cols_map.items() if "rank" in k), None)
-
-    score_col = None
-    for cand in ("impact_score_mean", "impact_score", "select_k_best_score", "raw_score", "score"):
-        if cand in cols_map:
-            score_col = cols_map[cand]
-            break
-    if not score_col:
-        score_col = next((orig for k, orig in cols_map.items() if "score" in k), None)
-
-    std_col = next((orig for k, orig in cols_map.items() if "std" in k or "variation" in k), None)
-    selected_col = cols_map.get("selected") or next((orig for k, orig in cols_map.items() if "selected" in k), None)
-
-    out = pd.DataFrame()
-    out["Rank"] = df[rank_col] if rank_col and rank_col in df.columns else range(1, len(df) + 1)
-    out["Feature"] = df[feature_col].astype(str) if feature_col and feature_col in df.columns else df.iloc[:, 0].astype(str)
-    out["Impact score"] = pd.to_numeric(df[score_col], errors="coerce") if score_col and score_col in df.columns else None
-    out["Score variation"] = pd.to_numeric(df[std_col], errors="coerce") if std_col and std_col in df.columns else None
-    out["Selected"] = df[selected_col].astype(str) if selected_col and selected_col in df.columns else None
-
-    return out[["Rank", "Feature", "Impact score", "Score variation", "Selected"]]
+    """Load and validate the feature-impact table produced by the workflow."""
+    table = pd.read_csv(FEATURE_IMPACT_TABLE_PATH)
+    missing_columns = set(FEATURE_IMPACT_COLUMNS) - set(table.columns)
+    if missing_columns:
+        raise ValueError(
+            "The feature-impact table is missing columns: "
+            f"{', '.join(sorted(missing_columns))}."
+        )
+    table = table[list(FEATURE_IMPACT_COLUMNS)].rename(columns={
+        "rank": "Rank",
+        "feature": "Feature",
+        "impact_score_mean": "Impact score",
+        "impact_score_std": "Score variation",
+        "selected_by_model": "Selected",
+    })
+    table["Selected"] = table["Selected"].map({True: "Yes", False: "No"})
+    return table
 
 
-@st.cache_data
-def _get_selected_features_from_analysis():
-    """Return features flagged as selected in the feature-impact CSV.
-
-    Falls back to features with select_k_best_score > FEATURE_SCORE_THRESHOLD,
-    then to the full FEATURE_COLUMNS list if parsing fails.
-    """
-    if FEATURE_IMPACT_TABLE_PATH.is_file():
-        try:
-            df = pd.read_csv(FEATURE_IMPACT_TABLE_PATH)
-            cols = {c.lower(): c for c in df.columns}
-            feature_col = cols.get("feature") or next((orig for k, orig in cols.items() if "feature" in k), None)
-            selected_col = cols.get("selected") or next((orig for k, orig in cols.items() if "selected" in k), None)
-            if feature_col and selected_col:
-                mask = df[selected_col].astype(str).str.lower().isin(["true", "1", "yes"])
-                selected = df.loc[mask, feature_col].astype(str).tolist()
-                if selected:
-                    return selected
-            # fallback: look for a select/score column
-            score_col = next((orig for k, orig in cols.items() if "select" in k and "score" in k), None)
-            if not score_col:
-                score_col = next((orig for k, orig in cols.items() if "score" in k), None)
-            if feature_col and score_col:
-                selected = df.loc[pd.to_numeric(df[score_col], errors="coerce") > FEATURE_SCORE_THRESHOLD, feature_col].astype(str).tolist()
-                if selected:
-                    return selected
-        except Exception:
-            pass
-    return list(FEATURE_COLUMNS)
+def get_selected_features():
+    """Return the common feature set retained by both saved pipelines."""
+    selections = {
+        name: tuple(training_utils.get_selected_model_features(model))
+        for name, model in load_models().items()
+    }
+    unique_selections = set(selections.values())
+    if len(unique_selections) != 1:
+        raise ValueError(
+            "The saved models use different selected features. Retrain both models "
+            "with the same project settings."
+        )
+    return list(next(iter(unique_selections)))
 
 
 def build_application_data(values):
@@ -277,11 +238,18 @@ def page_predict():
         "Enter an applicant's information to compare predictions from Logistic Regression and Random Forest."
     )
 
-    selected_features = _get_selected_features_from_analysis()
-    selected_set = set(selected_features)
+    try:
+        selected_features = get_selected_features()
+    except (FileNotFoundError, OSError, TypeError, ValueError, AttributeError) as exception:
+        st.error(f"Could not load compatible trained models: {exception}")
+        return
 
     with st.form("loan_application_form"):
-        st.markdown("**Required inputs (selected by feature analysis)**")
+        st.markdown("**Inputs used by both trained models**")
+        st.caption(
+            "Fields removed by feature selection are filled internally and cannot "
+            "affect the current predictions."
+        )
         cols = st.columns(3)
         inputs = {}
 
@@ -294,16 +262,6 @@ def page_predict():
         for j, feature in enumerate(selected_categorical):
             col = cols[(len(selected_numeric) + j) % len(cols)]
             inputs[feature] = render_categorical_input(col, feature)
-
-        st.markdown("**Optional inputs (not required by SelectKBest)** — defaults will be used if left unchanged")
-        with st.expander("Show optional fields", expanded=False):
-            for feature in FEATURE_COLUMNS:
-                if feature in selected_set:
-                    continue
-                if feature in NUMERIC_FEATURES:
-                    inputs[feature] = render_numeric_input(st, feature, DEFAULTS.get(feature, 0.0))
-                else:
-                    inputs[feature] = render_categorical_input(st, feature)
 
         submitted = st.form_submit_button("Predict loan status")
 
@@ -371,11 +329,6 @@ def page_feature_impact():
             table = load_feature_impact_table()
         except (OSError, UnicodeError, ValueError, pd.errors.ParserError) as exception:
             st.warning(f"Could not read the saved feature impact scores: {exception}")
-            try:
-                raw = pd.read_csv(FEATURE_IMPACT_TABLE_PATH)
-                st.dataframe(raw, hide_index=True)
-            except Exception as e:
-                st.error(f"Could not load feature impact CSV: {e}")
         else:
             st.dataframe(
                 table.style.format({

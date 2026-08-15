@@ -12,6 +12,17 @@ FEATURE_SCORE_TABLE_PATH = PROCESSED_DATA_DIR / "feature_scores.csv"
 FEATURE_IMPACT_ANALYSIS_PATH = MODELS_DIR / "feature_impact_analysis.json"
 FEATURE_IMPACT_TABLE_PATH = MODELS_DIR / "feature_impact_scores.csv"
 FEATURE_IMPACT_CHART_PATH = MODELS_DIR / "feature_impact_scores.png"
+COMPARISON_TABLE_PATH = MODELS_DIR / "comparison_table.csv"
+COMPARISON_CHART_PATH = MODELS_DIR / "comparison_chart.png"
+
+MODEL_PATHS = {
+    "Logistic Regression": MODELS_DIR / "logistic_regression_model.joblib",
+    "Random Forest": MODELS_DIR / "random_forest_model.joblib",
+}
+MODEL_SUMMARY_PATHS = {
+    "Logistic Regression": MODELS_DIR / "logistic_regression_training_summary.json",
+    "Random Forest": MODELS_DIR / "random_forest_training_summary.json",
+}
 
 RANDOM_STATE = 42
 TEST_SIZE = 0.30

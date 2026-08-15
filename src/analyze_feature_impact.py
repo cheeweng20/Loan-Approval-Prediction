@@ -18,29 +18,24 @@ from sklearn.inspection import permutation_importance
 from sklearn.metrics import f1_score, make_scorer
 
 from settings import (
+    COMPARISON_TABLE_PATH,
     FEATURE_COLUMNS,
     FEATURE_IMPACT_ANALYSIS_PATH,
     FEATURE_IMPACT_CHART_PATH,
     FEATURE_IMPACT_TABLE_PATH,
-    MODELS_DIR,
+    MODEL_PATHS,
+    MODEL_SUMMARY_PATHS,
     PROCESSED_DATA_DIR,
     RANDOM_STATE,
 )
 from training_utils import (
+    POSITIVE_LABEL,
     get_selected_model_features,
+    load_test_metrics,
     load_test_data,
 )
 
 
-MODEL_ARTIFACTS = {
-    "Logistic Regression": "logistic_regression_model.joblib",
-    "Random Forest": "random_forest_model.joblib",
-}
-SUMMARY_ARTIFACTS = {
-    "Logistic Regression": "logistic_regression_training_summary.json",
-    "Random Forest": "random_forest_training_summary.json",
-}
-COMPARISON_TABLE_PATH = MODELS_DIR / "comparison_table.csv"
 SCORING_METRIC = "approved_f1"
 N_REPEATS = 30
 
@@ -63,9 +58,9 @@ def load_best_model_choice():
 
     comparison = comparison.sort_values("f1", ascending=False, kind="stable")
     model_name = str(comparison.iloc[0]["model"])
-    if model_name not in MODEL_ARTIFACTS:
+    if model_name not in MODEL_PATHS:
         raise ValueError(f"No model artifact is configured for {model_name}.")
-    model_path = MODELS_DIR / MODEL_ARTIFACTS[model_name]
+    model_path = MODEL_PATHS[model_name]
     if not model_path.is_file():
         raise FileNotFoundError(f"Missing trained model file: {model_path}")
     return model_name, model_path
@@ -102,24 +97,7 @@ def calculate_permutation_impacts(model, X_test, y_test):
 
 
 def load_baseline_metrics(model_name):
-    summary_name = SUMMARY_ARTIFACTS[model_name]
-    summary_path = MODELS_DIR / summary_name
-    if not summary_path.is_file():
-        raise FileNotFoundError(
-            f"Missing training summary file for {model_name}: {summary_path}"
-        )
-    with summary_path.open("r", encoding="utf-8") as file:
-        summary = json.load(file)
-    test_metrics = summary.get("test_metrics")
-    if not isinstance(test_metrics, dict):
-        raise ValueError(f"{summary_name} is missing a valid test_metrics object.")
-    required_metrics = ("accuracy", "precision", "recall", "f1")
-    missing_metrics = [metric for metric in required_metrics if metric not in test_metrics]
-    if missing_metrics:
-        raise ValueError(
-            f"{summary_name} is missing metrics: {', '.join(missing_metrics)}."
-        )
-    return {metric: float(test_metrics[metric]) for metric in required_metrics}
+    return load_test_metrics(MODEL_SUMMARY_PATHS[model_name])
 
 
 def save_impact_chart(impacts, output_path):
